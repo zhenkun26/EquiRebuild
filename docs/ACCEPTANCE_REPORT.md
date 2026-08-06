@@ -102,7 +102,25 @@ curl -fsS -H "Authorization: Bearer <YOUR_API_SERVER_KEY>" \
   http://127.0.0.1:8000/api/v1/...                                 # gateway API（需启用 API server）
 ```
 
-> **待真机验证**：本机 Docker Desktop 未运行，镜像构建与容器实启、K8s 集群应用未执行；命令与配置已就绪，启动 Docker Desktop 后可补跑。
+### 3.4 Real-machine verification（2026-08-06 实机执行）
+
+**已验证**：
+
+```bash
+docker info            # daemon 正常（server 29.4.1, driver overlayfs）
+docker compose -f hermes-agent/docker-compose.yml config --quiet   # 通过
+```
+
+**镜像构建尝试与结论**：`docker build` 连试 4 次，全部在依赖下载阶段失败，根因是 **Docker Desktop 内部代理（http.docker.internal:3128）对大文件下载返回 502 Bad Gateway**（小索引文件正常，数 MB 的 apt Packages / 依赖包必挂；ghcr 基础镜像拉取约 130KB/s）。宿主机直连各源均正常（USTC Debian 镜像 1.6MB/s、GitHub/PyPI 200）。
+
+旁证：SQLite autoconf 包已在宿主机下载并验证 SHA256 与上游锁定值一致（`0e9483…eb9c`），说明代码侧无问题，瓶颈纯在容器网络路径。
+
+**解决路径（三选一）**：
+1. 在 Docker Desktop → Settings → Resources → Proxies 中配置可用代理（或关闭代理后重启），重跑 `docker compose -f hermes-agent/docker-compose.yml build`；
+2. 在 egress 良好的 VPS/CI（如 Hermes README 推荐的 $5 VPS）上构建并 push 镜像；
+3. 等待上游发布预构建镜像后直接拉取。
+
+> **状态**：容器实启、K8s 集群应用仍待上述网络修复后执行；命令与配置均已就绪。
 
 ## 4. Rollback Plan
 
