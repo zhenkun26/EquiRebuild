@@ -1,0 +1,16 @@
+schema: spec-driven
+
+context: |
+  Workspace for secondary development ("二次开发") of NousResearch/hermes-agent
+  (open-source self-improving AI agent framework; Python 3.11; uv; pytest).
+  The reference clone lives at ./hermes-agent and must NOT be modified — it is
+  the pristine upstream reference.
+  We develop new Hermes skills under ./hermes-skills/<name>/ and install them
+  into ~/.hermes/skills/ per Hermes skill conventions (HARDLINE standards in
+  AGENTS.md; user skills live under ~/.hermes/skills/).
+  Toolchain: uv for dependency management; pytest for tests; ruff (upstream
+  enforces only PLW1514); Python stdlib preferred for helper scripts.
+  Deliverable pattern of this change family: adversarial production review
+  (5 dimensions, P0/P1 grading) -> fixes -> tests with >=80% coverage ->
+  Docker Compose verification -> Kubernetes manifests -> Markdown acceptance
+  report (docs/ACCEPTANCE_REPORT.md).

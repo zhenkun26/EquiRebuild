@@ -1,0 +1,128 @@
+# Gateway + dashboard deployments. Replace <YOUR_REGISTRY> before applying.
+# The /opt/data volume uses emptyDir as a placeholder — swap for a PVC
+# (readWriteMany or per-pod) to keep ~/.hermes state across restarts.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: hermes
+  labels:
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hermes-agent
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hermes-agent
+        app.kubernetes.io/component: gateway
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: gateway
+          image: <YOUR_REGISTRY>/hermes-agent:v0.20.0
+          imagePullPolicy: IfNotPresent
+          command: ["gateway", "run"]
+          ports:
+            - name: api
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+            - secretRef:
+                name: hermes-secret
+                optional: true
+          volumeMounts:
+            - name: hermes-data
+              mountPath: /opt/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+          # API server is off by default; enable API_SERVER_KEY + API_SERVER_HOST
+          # in the Secret/ConfigMap before uncommenting the tcpSocket probe.
+          # readinessProbe:
+          #   tcpSocket:
+          #     port: api
+          #   initialDelaySeconds: 10
+          #   periodSeconds: 10
+      volumes:
+        - name: hermes-data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: hermes
+  labels:
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hermes-agent
+      app.kubernetes.io/component: dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hermes-agent
+        app.kubernetes.io/component: dashboard
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: dashboard
+          image: <YOUR_REGISTRY>/hermes-agent:v0.20.0
+          imagePullPolicy: IfNotPresent
+          # Bind 0.0.0.0 inside the pod; the Service/Ingress gate access.
+          command: ["dashboard", "--host", "0.0.0.0", "--no-open"]
+          ports:
+            - name: http
+              containerPort: 9119
+          envFrom:
+            - configMapRef:
+                name: hermes-config
+            - secretRef:
+                name: hermes-secret
+                optional: true
+          volumeMounts:
+            - name: hermes-data
+              mountPath: /opt/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: hermes-data
+          emptyDir: {}
