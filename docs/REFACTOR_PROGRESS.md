@@ -33,8 +33,8 @@ uv venv .venv 2>/dev/null; uv pip install --python .venv/bin/python -e '.[dev]' 
 
 ## 待办（下一轮候选，按优先级）
 
-1. **提交与推送**：本轮改动尚未 commit（或仅本地 commit，见 git log）。推送前确认 GitHub 远端与 CI 首次运行结果。
-2. **OpenSpec 同步**：本轮属于规格外重构，按项目流程应 `$openspec-propose` 补一个 change（如 `refactor-scanner-and-k8s`）再归档，保持规格仓一致。
+1. ~~提交与推送~~ ✅ 2026-08-07 完成：合并远端双语 README（冲突已手工融合），修复 CI dogfood 步骤（`--no-config` 绕开仓级豁免），main 已推送，CI 四任务全绿（test 3.11/3.12/3.13 + k8s）。
+2. ~~OpenSpec 同步~~ ✅ 2026-08-07 完成：主规格已更新，change 归档于 `openspec/changes/archive/2026-08-07-refactor-scanner-and-k8s/`（本机无 openspec CLI，未跑 `openspec validate`，格式对照既有归档手工核对）。
 3. **密钥熵检测**：香农熵作为第二信号（注意控制误报，先只在 `needs_confirmation` 通道启用）。
 4. **实例级 timeout 追踪**：`client = httpx.Client(timeout=30)` 后 `client.get(url)` 目前仍会标记；需做简单的赋值-属性数据流。
 5. **SKILL.md 版本**：`version: 0.1.0` 可考虑升 0.2.0（抑制机制+注册表是行为变更）；`related_skills: [ponytail-review]` 指向不存在的技能，需确认。
