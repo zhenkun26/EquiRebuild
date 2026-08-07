@@ -1,7 +1,7 @@
 ---
 name: hardening-review
 description: "Adversarial review grades, fixes, verifies P0/P1 findings."
-version: 0.1.0
+version: 0.2.0
 author: yuzheng
 license: MIT
 platforms: [linux, macos, windows]
@@ -9,7 +9,6 @@ metadata:
   hermes:
     tags: [review, security, hardening, adversarial]
     category: security
-    related_skills: [ponytail-review]
 ---
 
 # Hardening Review Skill
@@ -61,8 +60,8 @@ Do not use it for greenfield feature design or for simple typo fixes — those b
 Run `scripts/hardening_scan.py` over the target. It detects:
 
 - **D1 logic**: bare `except:` and `except X: pass` (swallowed exceptions), unparseable files.
-- **D2 performance**: HTTP client calls (`requests`, `httpx`, `aiohttp`) without an explicit `timeout` — import-aware, so same-named constructors from other SDKs are not flagged.
-- **D3 security**: hardcoded secret-like assignments and known secret prefixes (`sk-`, `AKIA`, `ghp_`, `glpat-`, `xox*-`, `AIza`, private-key blocks); obvious placeholders (`<YOUR_...>`, `REPLACE_WITH_*`, `${VAR}`) are not flagged.
+- **D2 performance**: HTTP client calls (`requests`, `httpx`, `aiohttp`) without an explicit `timeout` — import-aware, so same-named constructors from other SDKs are not flagged. Instance-level tracking: calls on a client built with `timeout=` (e.g. `client = httpx.Client(timeout=30)`) are cleared; calls on a timeout-less client (including `requests.Session`, which has no default timeout) are flagged.
+- **D3 security**: hardcoded secret-like assignments and known secret prefixes (`sk-`, `AKIA`, `ghp_`, `glpat-`, `xox*-`, `AIza`, private-key blocks); obvious placeholders (`<YOUR_...>`, `REPLACE_WITH_*`, `${VAR}`) are not flagged. High-entropy string tokens (Shannon entropy ≥ 4.5, ≥20 chars, mixed character classes) are reported as `HIGH_ENTROPY_STRING` — a second, `[manual]`-only signal.
 - **D4 configuration**: absolute filesystem paths and non-UTF-8 files.
 
 Line-based findings are marked `[manual]` — confirm them with `read_file` before fixing.

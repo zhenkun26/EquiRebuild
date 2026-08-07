@@ -5,7 +5,8 @@ Scans a target file or directory for mechanically detectable P0/P1 findings:
 
   D1 logic:        bare ``except:`` / ``except X: pass`` / unparseable files
   D2 performance:  HTTP client calls without an explicit timeout
-  D3 security:     hardcoded secret-like assignments and secret prefixes
+  D3 security:     hardcoded secret-like assignments, secret prefixes, and
+                   high-entropy string tokens (needs-confirmation signal)
   D4 configuration: absolute filesystem paths and non-UTF-8 files
 
 Exit codes: 0 = clean, 1 = findings, 2 = usage or target error.
@@ -17,10 +18,12 @@ from __future__ import annotations
 import argparse
 import ast
 import fnmatch
+import math
 import os
 import re
 import sys
 import tomllib
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +68,14 @@ BINARY_SUFFIXES = frozenset(
 HTTP_MODULES = frozenset({"requests", "httpx", "aiohttp"})
 HTTP_METHOD_NAMES = frozenset({"get", "post", "put", "patch", "delete", "request"})
 HTTP_CLIENT_CONSTRUCTORS = frozenset({"Client", "AsyncClient", "ClientSession"})
+# Constructors tracked for instance-level data flow: ``requests.Session`` has
+# no default timeout, so per-request timeouts are mandatory on its instances.
+INSTANCE_TRACKED_CONSTRUCTORS = HTTP_CLIENT_CONSTRUCTORS | frozenset({"Session"})
+
+# Entropy-based secret detection (second signal, needs_confirmation channel).
+HIGH_ENTROPY_MIN_LENGTH = 20
+HIGH_ENTROPY_THRESHOLD = 4.5
+HIGH_ENTROPY_TOKEN_RE = re.compile(r"[A-Za-z0-9+/=\-_]{20,}")
 
 SECRET_ASSIGNMENT_RE = re.compile(
     r"\b(secret|password|passwd|api[_-]?key|apikey|token|jwt|"
@@ -142,6 +153,13 @@ RULES: dict[str, Rule] = {
             SEVERITY_P0,
             3,
             "possible hardcoded secret-like value",
+            needs_confirmation=True,
+        ),
+        Rule(
+            "HIGH_ENTROPY_STRING",
+            SEVERITY_P1,
+            3,
+            "high-entropy string token; possible secret (entropy signal)",
             needs_confirmation=True,
         ),
         Rule(
@@ -460,22 +478,107 @@ def _check_http_timeouts(tree: ast.Module, path: Path) -> list[Finding]:
     """Find HTTP client calls that lack an explicit timeout keyword."""
     findings: list[Finding] = []
     bindings = _collect_http_bindings(tree)
+    instances = _collect_client_instances(tree, bindings)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _is_http_call_without_timeout(
-            node, bindings
-        ):
+        if not isinstance(node, ast.Call):
+            continue
+        instance_verdict = _instance_call_verdict(node, instances)
+        if instance_verdict == "skip":
+            continue
+        if instance_verdict == "flag":
+            findings.append(
+                make_finding(
+                    "HTTP_NO_TIMEOUT",
+                    path,
+                    node.lineno,
+                    message=(
+                        "HTTP client instance call without explicit timeout; "
+                        "the client was constructed without a default timeout"
+                    ),
+                )
+            )
+            continue
+        if _is_http_call_without_timeout(node, bindings):
             findings.append(make_finding("HTTP_NO_TIMEOUT", path, node.lineno))
     return findings
 
 
+def _call_has_timeout(node: ast.Call) -> bool:
+    """Return True when the call passes ``timeout=`` or a ``**kwargs`` splat."""
+    for keyword in node.keywords:
+        if keyword.arg == "timeout" or keyword.arg is None:
+            return True
+    return False
+
+
+def _is_http_constructor(node: ast.Call, bindings: HttpBindings) -> bool:
+    """Return True when the call builds a known HTTP client instance."""
+    func = node.func
+    if isinstance(func, ast.Attribute):
+        return (
+            isinstance(func.value, ast.Name)
+            and func.value.id in bindings.module_aliases
+            and func.attr in INSTANCE_TRACKED_CONSTRUCTORS
+        )
+    if isinstance(func, ast.Name):
+        return func.id in bindings.bare_constructors
+    return False
+
+
+def _collect_client_instances(
+    tree: ast.Module, bindings: HttpBindings
+) -> dict[str, bool]:
+    """Map client variable names to whether their constructor set a timeout.
+
+    Simple assignment-based data flow: ``client = httpx.Client(timeout=30)``
+    records ``client -> True``. A later reassignment to an unknown value drops
+    the name so calls on it fall back to the conservative default (not
+    flagged).
+    """
+    instances: dict[str, bool] = {}
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            continue
+        name = node.targets[0].id
+        if isinstance(node.value, ast.Call) and _is_http_constructor(
+            node.value, bindings
+        ):
+            instances[name] = _call_has_timeout(node.value)
+        elif name in instances:
+            del instances[name]
+    return instances
+
+
+def _instance_call_verdict(
+    node: ast.Call, instances: dict[str, bool]
+) -> str | None:
+    """Classify a method call on a tracked client instance.
+
+    Returns ``"flag"`` (instance has no default timeout and the call adds
+    none), ``"skip"`` (timeout comes from the instance or the call), or
+    ``None`` when the call is not a method call on a tracked instance.
+    """
+    func = node.func
+    if not (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id in instances
+        and func.attr in HTTP_METHOD_NAMES
+    ):
+        return None
+    if instances[func.value.id] or _call_has_timeout(node):
+        return "skip"
+    return "flag"
+
+
 def _is_http_call_without_timeout(node: ast.Call, bindings: HttpBindings) -> bool:
     """Return True for known HTTP client calls missing the timeout kwarg."""
-    for keyword in node.keywords:
-        if keyword.arg == "timeout":
-            return False
-        if keyword.arg is None:
-            # ``**kwargs`` may carry a timeout; heuristic gives it a pass.
-            return False
+    if _call_has_timeout(node):
+        return False
     func = node.func
     if isinstance(func, ast.Attribute):
         # ``requests.get(...)`` / ``httpx.Client(...)`` on an imported module.
@@ -493,6 +596,45 @@ def _is_http_call_without_timeout(node: ast.Call, bindings: HttpBindings) -> boo
     return False
 
 
+def _shannon_entropy(text: str) -> float:
+    """Return the Shannon entropy of text in bits per character."""
+    counts = Counter(text)
+    length = len(text)
+    return -sum(
+        (count / length) * math.log2(count / length)
+        for count in counts.values()
+    )
+
+
+def _has_mixed_character_classes(token: str) -> bool:
+    """Return True for lower+upper+digit mixes typical of random tokens."""
+    return (
+        any(char.islower() for char in token)
+        and any(char.isupper() for char in token)
+        and any(char.isdigit() for char in token)
+    )
+
+
+def _has_high_entropy_token(line_text: str) -> bool:
+    """Return True when the line carries a random-looking long token.
+
+    Guards against false positives: placeholders are skipped up front, tokens
+    must mix lower/upper/digit character classes (pure hex tops out at 4.0
+    bits anyway), and the entropy threshold sits above English prose.
+    """
+    if PLACEHOLDER_VALUE_RE.search(line_text):
+        return False
+    for match in HIGH_ENTROPY_TOKEN_RE.finditer(line_text):
+        token = match.group(0)
+        if (
+            len(token) >= HIGH_ENTROPY_MIN_LENGTH
+            and _has_mixed_character_classes(token)
+            and _shannon_entropy(token) >= HIGH_ENTROPY_THRESHOLD
+        ):
+            return True
+    return False
+
+
 def _scan_lines(path: Path, lines: Sequence[str]) -> list[Finding]:
     """Run secret and absolute-path regexes over source lines."""
     findings: list[Finding] = []
@@ -506,6 +648,10 @@ def _scan_lines(path: Path, lines: Sequence[str]) -> list[Finding]:
             secret_match = None
         if secret_match or SECRET_PREFIX_RE.search(line_text):
             findings.append(make_finding("HARDCODED_SECRET", path, index))
+        elif _has_high_entropy_token(line_text):
+            # Second signal only: lines already flagged by the prefix or
+            # assignment rules do not need a duplicate entropy finding.
+            findings.append(make_finding("HIGH_ENTROPY_STRING", path, index))
         if ABSOLUTE_PATH_RE.search(line_text):
             findings.append(make_finding("ABSOLUTE_PATH", path, index))
     return findings

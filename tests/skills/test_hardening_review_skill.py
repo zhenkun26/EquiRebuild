@@ -530,3 +530,101 @@ def test_cli_should_list_rules_without_target():
 def test_cli_should_exit_two_when_target_is_omitted():
     completed = run_cli("--exclude", "x")
     assert completed.returncode == hardening_scan.EXIT_ERROR
+
+
+# --- Instance-level timeout tracking -----------------------------------------
+
+
+def test_should_not_flag_instance_method_when_constructor_has_timeout(tmp_path):
+    fixture = tmp_path / "inst_ok.py"
+    fixture.write_text(
+        "import httpx\n"
+        "client = httpx.Client(timeout=30)\n"
+        "resp = client.get('https://a.com')\n",
+        encoding="utf-8",
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    assert findings == []
+
+
+def test_should_flag_instance_method_when_constructor_lacks_timeout(tmp_path):
+    fixture = tmp_path / "inst_bad.py"
+    fixture.write_text(
+        "import httpx\n"
+        "client = httpx.Client()\n"
+        "resp = client.get('https://a.com')\n"
+        "ok = client.post('https://a.com', timeout=5)\n",
+        encoding="utf-8",
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    timeout_findings = [f for f in findings if f.rule == "HTTP_NO_TIMEOUT"]
+    assert [f.line for f in timeout_findings] == [2, 3]
+
+
+def test_should_flag_requests_session_method_without_timeout(tmp_path):
+    fixture = tmp_path / "session.py"
+    fixture.write_text(
+        "import requests\n"
+        "session = requests.Session()\n"
+        "resp = session.get('https://a.com')\n",
+        encoding="utf-8",
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    timeout_findings = [f for f in findings if f.rule == "HTTP_NO_TIMEOUT"]
+    assert [f.line for f in timeout_findings] == [3]
+    assert "instance" in timeout_findings[0].message
+
+
+def test_should_not_flag_instance_method_after_unknown_reassignment(tmp_path):
+    fixture = tmp_path / "reassigned.py"
+    fixture.write_text(
+        "import httpx\n"
+        "client = httpx.Client(timeout=30)\n"
+        "client = make_something()\n"
+        "resp = client.get('https://a.com')\n",
+        encoding="utf-8",
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    assert findings == []
+
+
+# --- Entropy-based secret detection ------------------------------------------
+
+
+def test_should_flag_high_entropy_token_as_needs_confirmation():
+    findings = hardening_scan.scan_text_file(FIXTURES_DIR / "high_entropy.txt")
+    entropy_findings = [f for f in findings if f.rule == "HIGH_ENTROPY_STRING"]
+    assert len(entropy_findings) == 1
+    assert entropy_findings[0].severity == hardening_scan.SEVERITY_P1
+    assert entropy_findings[0].dimension == 3
+    assert entropy_findings[0].needs_confirmation is True
+
+
+def test_should_not_flag_hex_digest_below_entropy_threshold(tmp_path):
+    fixture = tmp_path / "hex.py"
+    fixture.write_text(
+        'git_sha = "0123456789abcdef0123456789abcdef01234567"\n',
+        encoding="utf-8",
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    assert findings == []
+
+
+def test_should_not_flag_low_entropy_long_string(tmp_path):
+    fixture = tmp_path / "low.py"
+    fixture.write_text(
+        'note = "aaaaaaaaaaaaaaaaaaaaaaaaaaaa"\n', encoding="utf-8"
+    )
+    findings = hardening_scan.scan_python_file(fixture)
+    assert findings == []
+
+
+def test_should_not_add_entropy_finding_when_secret_rule_already_fires():
+    findings = hardening_scan.scan_text_file(FIXTURES_DIR / "prefix_tokens.txt")
+    per_line_rules: dict[int, set[str]] = {}
+    for finding in findings:
+        per_line_rules.setdefault(finding.line, set()).add(finding.rule)
+    assert all(
+        not {"HARDCODED_SECRET", "HIGH_ENTROPY_STRING"} <= rules
+        for rules in per_line_rules.values()
+    )

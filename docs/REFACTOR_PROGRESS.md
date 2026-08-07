@@ -26,8 +26,8 @@
 cd /Users/yuzheng/My_Learning_For_AI/EquiRebuild/hermes-agent-hardening
 uv venv .venv 2>/dev/null; uv pip install --python .venv/bin/python -e '.[dev]'  # 若 .venv 丢失
 .venv/bin/python -m ruff check hermes-skills tests   # 应 All checks passed
-.venv/bin/python -m pytest tests/ -q                 # 应 49 passed
-.venv/bin/python -m coverage run -m pytest tests/ -q && .venv/bin/python -m coverage report  # 应 ≥80%（现 94%）
+.venv/bin/python -m pytest tests/ -q                 # 应 57 passed
+.venv/bin/python -m coverage run -m pytest tests/ -q && .venv/bin/python -m coverage report  # 应 ≥80%（现 95%）
 .venv/bin/hardening-scan .                           # 应 clean，退出码 0
 ```
 
@@ -35,10 +35,10 @@ uv venv .venv 2>/dev/null; uv pip install --python .venv/bin/python -e '.[dev]' 
 
 1. ~~提交与推送~~ ✅ 2026-08-07 完成：合并远端双语 README（冲突已手工融合），修复 CI dogfood 步骤（`--no-config` 绕开仓级豁免），main 已推送，CI 四任务全绿（test 3.11/3.12/3.13 + k8s）。
 2. ~~OpenSpec 同步~~ ✅ 2026-08-07 完成：主规格已更新，change 归档于 `openspec/changes/archive/2026-08-07-refactor-scanner-and-k8s/`（本机无 openspec CLI，未跑 `openspec validate`，格式对照既有归档手工核对）。
-3. **密钥熵检测**：香农熵作为第二信号（注意控制误报，先只在 `needs_confirmation` 通道启用）。
-4. **实例级 timeout 追踪**：`client = httpx.Client(timeout=30)` 后 `client.get(url)` 目前仍会标记；需做简单的赋值-属性数据流。
-5. **SKILL.md 版本**：`version: 0.1.0` 可考虑升 0.2.0（抑制机制+注册表是行为变更）；`related_skills: [ponytail-review]` 指向不存在的技能，需确认。
-6. **安装脚本**：目前技能安装仍是 `cp -R`，可加 `install.sh`（含 `~/.hermes/skills/` 目标与 reload 提示）。
+3. ~~密钥熵检测~~ ✅ 2026-08-07 完成：`HIGH_ENTROPY_STRING` 规则（Shannon ≥4.5、≥20 字符、大小写+数字混合、占位符豁免），仅 `needs_confirmation` 通道（`[manual]`，P1/D3）；已被前缀/赋值规则标记的行不重复报。
+4. ~~实例级 timeout 追踪~~ ✅ 2026-08-07 完成：赋值级数据流 `_collect_client_instances`；构造器带 timeout 的实例方法调用放行，无 timeout 的实例（含 `requests.Session`）方法调用标记；未知重赋值回落保守不标记。注：交接文档描述的"`client.get` 仍会标记"在本轮复测中未复现（import 感知改造后已不误报），实际落地的是反向漏报修正。
+5. ~~SKILL.md 版本~~ ✅ 2026-08-07 完成：升 0.2.0；`related_skills: [ponytail-review]` 确认悬空（全仓无此技能），已移除。
+6. ~~安装脚本~~ ✅ 2026-08-07 完成：`hermes-skills/hardening-review/install.sh`（`--dest`/`--check`，原子替换，reload 提示），README 安装节已更新。
 7. **真机验证**：Docker 镜像构建受 Docker Desktop 代理 502 限制（见验收报告 §3.4），K8s 清单尚为静态校验，未上集群。
 
 ## 注意事项

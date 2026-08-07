@@ -6,8 +6,8 @@
 
 [![OpenSpec](https://img.shields.io/badge/OpenSpec-spec--driven-6f42c1)](openspec/specs)
 [![Python](https://img.shields.io/badge/Python-stdlib%20only-3776AB)](hermes-skills/hardening-review/scripts/hardening_scan.py)
-[![Tests](https://img.shields.io/badge/Tests-49%20passed-2ea44f)](docs/ACCEPTANCE_REPORT.md)
-[![Coverage](https://img.shields.io/badge/Coverage-94%25-2ea44f)](docs/ACCEPTANCE_REPORT.md)
+[![Tests](https://img.shields.io/badge/Tests-57%20passed-2ea44f)](docs/ACCEPTANCE_REPORT.md)
+[![Coverage](https://img.shields.io/badge/Coverage-95%25-2ea44f)](docs/ACCEPTANCE_REPORT.md)
 [![CI](https://github.com/zhenkun26/hermes-agent-hardening/actions/workflows/ci.yml/badge.svg)](https://github.com/zhenkun26/hermes-agent-hardening/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/licenses/MIT)
 
@@ -52,8 +52,8 @@ Findings are always labeled `[严重][P0]` or `[中危][P1]` with exact file loc
 **`hardening_scan.py`**（纯 stdlib，无第三方依赖）自动检测 / A stdlib-only scanner that automatically detects:
 
 - 裸 `except:` / `except X: pass` / bare `except:` and swallowed exceptions
-- HTTP 客户端无显式 `timeout`（import 感知，避免误报同名 SDK 构造器）/ HTTP clients without explicit `timeout` (import-aware, avoiding false positives on same-named SDK constructors)
-- 硬编码密钥（`sk-` / `AKIA` / `ghp_` / `glpat-` / `xox*-` / `AIza` 前缀、私钥块与常见键名赋值；`<YOUR_...>` / `REPLACE_WITH_*` 等占位符自动豁免）/ hardcoded secrets (`sk-`, `AKIA`, `ghp_`, `glpat-`, `xox*-`, `AIza` prefixes, private-key blocks and common key-name assignments; placeholders like `<YOUR_...>` are auto-exempted)
+- HTTP 客户端无显式 `timeout`（import 感知，避免误报同名 SDK 构造器；实例级追踪——`client = httpx.Client(timeout=30)` 后 `client.get(...)` 放行，构造器无 timeout 时方法调用会被标记）/ HTTP clients without explicit `timeout` (import-aware, avoiding false positives on same-named SDK constructors; instance-level tracking — calls on a client built with `timeout=` are cleared, calls on a timeout-less client are flagged)
+- 硬编码密钥（`sk-` / `AKIA` / `ghp_` / `glpat-` / `xox*-` / `AIza` 前缀、私钥块与常见键名赋值；`<YOUR_...>` / `REPLACE_WITH_*` 等占位符自动豁免；高熵字符串作为第二信号，标记 `[manual]` 需人工确认）/ hardcoded secrets (`sk-`, `AKIA`, `ghp_`, `glpat-`, `xox*-`, `AIza` prefixes, private-key blocks and common key-name assignments; placeholders like `<YOUR_...>` are auto-exempted; high-entropy strings as a second `[manual]` signal)
 - 本地绝对路径 / local absolute paths
 - 非 UTF-8 文件 / non-UTF-8 files
 
@@ -93,9 +93,12 @@ hardening-scan <target> ...
 安装为 Hermes 用户技能 / Install as a Hermes user skill：
 
 ```bash
-cp -R hermes-skills/hardening-review ~/.hermes/skills/security/hardening-review
+./hermes-skills/hardening-review/install.sh          # 安装到 ~/.hermes/skills/security/hardening-review
+./hermes-skills/hardening-review/install.sh --check  # 校验已安装副本与源码一致 / verify installed copy
 hermes skills reload   # 或重启会话 / or restart the session
 ```
+
+（等价的手工方式 / manual equivalent：`cp -R hermes-skills/hardening-review ~/.hermes/skills/security/hardening-review`）
 
 然后在对话中直接使用 / Then use it directly in conversation：
 
@@ -120,8 +123,8 @@ uv venv && uv pip install --python .venv/bin/python -e '.[dev]'
 
 | 指标 / Metric | 结果 / Result |
 |:---|:---|
-| 单元测试 / Unit tests | 49 个用例全绿（stdlib + pytest + `unittest.mock`，无网络调用；CI 矩阵 Python 3.11/3.12/3.13）/ 49 passing, offline; CI matrix across Python 3.11–3.13 |
-| 覆盖率 / Coverage | `hardening_scan.py` 行覆盖率 **94%**（要求 ≥80%，pyproject 中 `fail_under = 80` 强制）/ 94% line coverage (threshold ≥80%, enforced via `fail_under = 80`) |
+| 单元测试 / Unit tests | 57 个用例全绿（stdlib + pytest + `unittest.mock`，无网络调用；CI 矩阵 Python 3.11/3.12/3.13）/ 57 passing, offline; CI matrix across Python 3.11–3.13 |
+| 覆盖率 / Coverage | `hardening_scan.py` 行覆盖率 **95%**（要求 ≥80%，pyproject 中 `fail_under = 80` 强制）/ 95% line coverage (threshold ≥80%, enforced via `fail_under = 80`) |
 | 并发冒烟 / Concurrency smoke | 1000 次并发调用全部退出码符合预期（5.8s，无共享状态）/ 1000 concurrent calls, correct exit codes, no shared state |
 | 上游零污染 / Upstream purity | `git -C hermes-agent status --porcelain` 恒为空 / always empty |
 | 自审闭环 / Self-review loop | `hardening-scan .` 全仓扫描退出码 `0`（fixtures 经 `.hardening-scan.toml` 豁免，样本文本均用占位符）/ full-repo self-scan exits `0` (fixtures exempted via config, samples use placeholders) |
@@ -133,6 +136,7 @@ uv venv && uv pip install --python .venv/bin/python -e '.[dev]'
 ```
 ├── hermes-skills/hardening-review/   # 核心交付：Hermes 用户技能 / core deliverable
 │   ├── SKILL.md                      # 5 维对抗审查程序（HARDLINE 合规）/ 5-dimension review procedure (HARDLINE compliant)
+│   ├── install.sh                    # 安装/校验脚本（目标 ~/.hermes/skills/）/ install & verify script
 │   ├── scripts/hardening_scan.py     # 机械扫描器（纯 stdlib，退出码 0/1/2）/ mechanical scanner (stdlib-only)
 │   └── templates/report_template.md  # 验收报告骨架（<YOUR_...> 占位符规范）/ acceptance report template
 ├── pyproject.toml                    # 打包与开发依赖（uv/pip 可复现安装）/ packaging & dev deps (reproducible install)
