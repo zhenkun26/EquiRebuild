@@ -93,7 +93,7 @@ hardening-scan <target> ...
 安装为 Hermes 用户技能 / Install as a Hermes user skill：
 
 ```bash
-./hermes-skills/hardening-review/install.sh          # 安装到 ~/.hermes/skills/security/hardening-review
+./hermes-skills/hardening-review/install.sh          # 安装到 ~/.hermes/skills/security/hardening-review / install to the Hermes user skills directory
 ./hermes-skills/hardening-review/install.sh --check  # 校验已安装副本与源码一致 / verify installed copy
 hermes skills reload   # 或重启会话 / or restart the session
 ```
@@ -202,7 +202,29 @@ kubectl -n hermes get pods
 
 ---
 
-## 九、许可与致谢 / License & Acknowledgments
+## 九、变更日志 / Changelog
+
+### 2026-08-07 — 检测能力增强 / Detection enhancements（`1ecd0fe`）
+
+- 实例级 timeout 追踪：构造器带 `timeout=` 的实例方法调用放行，无默认 timeout 的实例（含 `requests.Session`）方法调用标记 / instance-level timeout tracking: calls on clients built with `timeout=` are cleared; calls on timeout-less clients (incl. `requests.Session`) are flagged
+- 密钥熵检测：新规则 `HIGH_ENTROPY_STRING`（P1，`[manual]` 通道，Shannon 熵 ≥ 4.5）/ entropy-based secret signal (`HIGH_ENTROPY_STRING`, P1, `[manual]`-only, Shannon entropy ≥ 4.5)
+- SKILL.md 升 `0.2.0`；新增 `install.sh`；测试 49 → 57，覆盖率 94% → 95% / SKILL.md bumped to `0.2.0`; `install.sh` added; tests 49 → 57, coverage 94% → 95%
+
+### 2026-08-07 — 工程化重构 / Engineering refactor（`f9e7e12`）
+
+- 打包与 CI：`pyproject.toml` + GitHub Actions（Python 3.11–3.13 矩阵）/ packaging & CI matrix
+- 抑制机制：行内 `# hardening-scan: ignore=RULE_ID` 与仓级 `.hardening-scan.toml` / inline suppression & repo-level config
+- 误报修正：HTTP 检查 import 感知；密钥占位符白名单与新前缀 / import-aware HTTP checks; secret placeholder allowlist & new prefixes
+- 规则注册表与 `--list-rules`；测试 30 → 49 / rule registry with `--list-rules`; tests 30 → 49
+- K8s 修正：共享 PVC、PDB/HPA 与单副本一致、Ingress basic-auth fail-closed / shared PVC, single-replica-consistent PDB/HPA, fail-closed Ingress auth
+
+### 2026-08-06 — 首次交付 / Initial delivery（`c2eb841`）
+
+- `hardening-review` 技能、机械扫描器、报告模板、30 个测试用例、8 份 K8s 清单、综合验收报告 / the skill, scanner, report template, 30 tests, 8 K8s manifests, acceptance report
+
+---
+
+## 十、许可与致谢 / License & Acknowledgments
 
 **MIT**。上游 Hermes Agent 版权归 [NousResearch](https://github.com/NousResearch) 所有，本仓库仅作学习与二次开发参考。
 

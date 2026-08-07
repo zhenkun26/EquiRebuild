@@ -12,11 +12,12 @@
 
 ```
 hermes-skills/hardening-review/
-├── SKILL.md                      # 5 维对抗审查程序（HARDLINE 合规）
+├── SKILL.md                      # 5 维对抗审查程序（HARDLINE 合规，v0.2.0）
+├── install.sh                    # 安装/校验脚本（目标 ~/.hermes/skills/）
 ├── scripts/hardening_scan.py     # 机械扫描：退出码 0/1/2，纯 stdlib
 └── templates/report_template.md  # 验收报告骨架（<YOUR_...> 占位符规范）
-tests/skills/test_hardening_review_skill.py   # 30 个用例，无网络
-deploy/*.yaml                     # 8 份 K8s 清单（gateway + dashboard）
+tests/skills/test_hardening_review_skill.py   # 57 个用例，无网络
+deploy/*.yaml                     # 9 份 K8s 清单（gateway + dashboard，含共享 PVC）
 ```
 
 **上游零污染**：`git -C hermes-agent status --porcelain` 为空（0 改动）。
@@ -72,7 +73,7 @@ cd /Users/yuzheng/My_Learning_For_AI/EquiRebuild
 .venv/bin/python -m coverage report -m --include='*/hermes-skills/hardening-review/scripts/hardening_scan.py'
 ```
 
-**结果**：`49 passed`；`hardening_scan.py` 行覆盖率 **94%**（≥80% 达标；`pyproject.toml` 中 `fail_under = 80` 强制门禁）。2026-08-07 重构轮后：`hardening-scan .` 全仓扫描退出码 `0`（fixtures 经 `.hardening-scan.toml` 豁免），dogfooding 闭环对全仓成立。
+**结果**：`57 passed`；`hardening_scan.py` 行覆盖率 **95%**（≥80% 达标；`pyproject.toml` 中 `fail_under = 80` 强制门禁）。2026-08-07 两轮迭代后：`hardening-scan .` 全仓扫描退出码 `0`（fixtures 经 `.hardening-scan.toml` 豁免），CI（ruff + pytest + 覆盖率 + dogfood + kubeval，Python 3.11–3.13 矩阵）在 main 上全绿，dogfooding 闭环对全仓成立。
 
 ### 3.2 Concurrency smoke
 
@@ -90,7 +91,7 @@ docker compose -f hermes-agent/docker-compose.yml config --quiet
 ```
 
 ```bash
-# 8 份 deploy/*.yaml 用 yaml.safe_load_all 解析 → 全部通过；
+# 9 份 deploy/*.yaml 用 yaml.safe_load_all 解析 → 全部通过；
 # Secret 值 base64 解码后均为 REPLACE_WITH_* 占位符，无真实密钥
 ```
 
@@ -130,3 +131,27 @@ docker compose -f hermes-agent/docker-compose.yml config --quiet   # 通过
 | Compose 回退 | `docker compose down && docker compose up -d`（换回旧镜像 tag） |
 | K8s 回退 | `kubectl -n hermes rollout undo deployment/gateway`（或 dashboard） |
 | 代码回退 | `git revert <fix-commit>` / `git checkout <previous-sha> -- <path>` |
+
+## 5. Changelog（后续迭代记录）
+
+### 2026-08-07 第一轮：工程化重构（commit `f9e7e12`）
+
+- 打包与 CI：新增 `pyproject.toml`（`hardening-scan` 入口、dev extras、coverage `fail_under = 80`）与 GitHub Actions（ruff + pytest + 覆盖率 + dogfood + kubeval，Python 3.11–3.13 矩阵）。
+- 抑制机制：行内 `# hardening-scan: ignore=RULE_ID`；仓级 `.hardening-scan.toml`（`exclude`/`disable-rules`）；`--config`/`--no-config`。
+- 误报修正：HTTP 检查 import 感知（`HttpBindings`）、`**kwargs` 放行；密钥规则占位符白名单与新前缀（`glpat-`/`xox*-`/`AIza`/私钥块）。
+- 规则注册表：`Rule` dataclass + `RULES` + `--list-rules`；测试 30 → 49。
+- K8s 修正：新增 `08-pvc.yaml`（共享 RWX PVC）、PDB `maxUnavailable: 1`、HPA 封顶 1、UID 统一 10001、Ingress basic-auth fail-closed、gateway `Recreate`。
+- 规格归档：`openspec/changes/archive/2026-08-07-refactor-scanner-and-k8s/`。
+- CI 修复（commit `bff451d`）：dogfood 步骤加 `--no-config` 绕开仓级豁免，fixtures 必须产生发现。
+
+### 2026-08-07 第二轮：检测能力增强（commit `1ecd0fe`）
+
+- 实例级 timeout 追踪：赋值级数据流 `_collect_client_instances`——构造器带 `timeout=` 的实例方法调用放行；无默认 timeout 的实例（含 `requests.Session`）方法调用标记；未知重赋值保守回落。
+- 密钥熵检测：新规则 `HIGH_ENTROPY_STRING`（P1/D3，`[manual]` 通道）——Shannon 熵 ≥4.5、≥20 字符、大小写+数字混合、占位符豁免、密钥命中行不重复报。
+- SKILL.md 升 `0.2.0`，移除悬空 `related_skills: [ponytail-review]`。
+- 新增 `install.sh`（`--dest`/`--check`，原子替换）；测试 49 → 57，覆盖率 94% → 95%。
+- 规格归档：`openspec/changes/archive/2026-08-07-scanner-instance-tracking-and-entropy/`。
+
+### 待办
+
+- 真机验证：Docker 镜像构建受 Docker Desktop 代理 502 限制（见 §3.4），K8s 清单尚为静态校验，未上集群。
