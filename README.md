@@ -11,8 +11,11 @@
 │   ├── SKILL.md                      # 5 维对抗审查程序（HARDLINE 合规）
 │   ├── scripts/hardening_scan.py     # 机械扫描器（纯 stdlib，退出码 0/1/2）
 │   └── templates/report_template.md  # 验收报告骨架（<YOUR_...> 占位符规范）
+├── pyproject.toml                    # 打包与开发依赖（uv/pip 可复现安装）
+├── .hardening-scan.toml              # 扫描器仓级配置（豁免 fixtures 等）
+├── .github/workflows/ci.yml          # CI：ruff + pytest + 覆盖率 + dogfood 扫描
 ├── tests/skills/                     # pytest 测试 + fixtures（无网络）
-├── deploy/                           # Kubernetes 清单（8 份，全部占位符）
+├── deploy/                           # Kubernetes 清单（9 份，全部占位符）
 ├── docs/ACCEPTANCE_REPORT.md         # 本次交付的综合验收报告
 ├── openspec/                         # OpenSpec 规格仓库
 │   ├── specs/hardening-review/       # 主规格（已同步）
@@ -40,12 +43,28 @@
 
 ```bash
 python3 hermes-skills/hardening-review/scripts/hardening_scan.py <target> \
-  [--output report.md] [--exclude GLOB ...]
+  [--output report.md] [--exclude GLOB ...] [--config PATH] [--no-config]
 ```
 
-自动检测：裸 `except:` / `except X: pass`、HTTP 客户端无显式 `timeout`、硬编码密钥（`sk-`/`AKIA`/`ghp_` 前缀与常见键名赋值）、绝对路径、非 UTF-8 文件。
+或安装后用入口命令（见下文"开发环境"）：`hardening-scan <target> ...`
+
+自动检测：裸 `except:` / `except X: pass`、HTTP 客户端无显式 `timeout`（import 感知，避免误报同名 SDK 构造器）、硬编码密钥（`sk-`/`AKIA`/`ghp_`/`glpat-`/`xox*-`/`AIza` 前缀、私钥块与常见键名赋值；`<YOUR_...>`/`REPLACE_WITH_*` 等占位符自动豁免）、绝对路径、非 UTF-8 文件。
 
 退出码：`0` 无发现 / `1` 有发现 / `2` 用法或目标错误。缺失目标必报错，绝不静默通过。行级正则发现标记 `[manual]`，需人工确认。
+
+**抑制与配置**：
+
+- 行内豁免：`# hardening-scan: ignore=RULE_ID`（或省略 `=RULE_ID` 豁免该行全部规则）。
+- 仓级配置 `.hardening-scan.toml`（自动从目标目录或 CWD 发现）：`exclude = [...]` 与 `disable-rules = [...]`。
+- `hardening-scan --list-rules` 查看规则注册表（规则 ID、级别、维度）。
+
+### 开发环境
+
+```bash
+uv venv && uv pip install --python .venv/bin/python -e '.[dev]'
+.venv/bin/python -m pytest tests/ -q        # 单元测试
+.venv/bin/python -m ruff check hermes-skills tests
+```
 
 ### 安装（Hermes 用户技能）
 
@@ -62,11 +81,11 @@ hermes skills reload   # 或重启会话
 
 ## 验收结果
 
-- **单元测试**：30 个用例全绿（stdlib + pytest + `unittest.mock`，无网络调用）
-- **覆盖率**：`hardening_scan.py` 行覆盖率 **99%**（要求 ≥80%）
+- **单元测试**：49 个用例全绿（stdlib + pytest + `unittest.mock`，无网络调用；CI 矩阵 Python 3.11/3.12/3.13）
+- **覆盖率**：`hardening_scan.py` 行覆盖率 **94%**（要求 ≥80%，pyproject 中 `fail_under = 80` 强制）
 - **并发冒烟**：1000 次并发调用全部退出码符合预期（5.8s，无共享状态）
 - **上游零污染**：`git -C hermes-agent status --porcelain` 恒为空
-- **自审闭环**：技能审查自身代码，修复 3 个 [P1]（密钥样本文本入库、输出写入崩溃、BrokenPipe 未处理），复扫全 clean
+- **自审闭环**：`hardening-scan .` 全仓扫描退出码 `0`（fixtures 经 `.hardening-scan.toml` 豁免，样本文本均用占位符）
 
 详见 [docs/ACCEPTANCE_REPORT.md](docs/ACCEPTANCE_REPORT.md)。
 
@@ -84,15 +103,22 @@ HERMES_UID=$(id -u) HERMES_GID=$(id -g) docker compose -f hermes-agent/docker-co
 ### Kubernetes（本仓库清单）
 
 ```bash
-kubectl apply -f deploy/            # namespace/configmap/secret/deployment/pdb/service/ingress/hpa
+kubectl apply -f deploy/            # namespace/configmap/secret/deployment/pdb/service/ingress/hpa/pvc
 kubectl -n hermes get pods
 ```
 
 使用前必须替换：
 
-- `deploy/03-deployment.yaml` 中的 `<YOUR_REGISTRY>` 镜像地址
+- `deploy/03-deployment.yaml` 中的 `<YOUR_REGISTRY>` 镜像地址（生产建议按 digest 固定）
 - `deploy/02-secret.yaml` 中的占位 base64（`printf '<YOUR_VALUE>' | base64` 重新生成）
 - `deploy/06-ingress.yaml` 中的 `<YOUR_DOMAIN>`
+- `deploy/08-pvc.yaml` 中的 `storageClassName`（RWX 存储类；单节点集群可改 `ReadWriteOnce`）
+
+架构约束（有意为之）：
+
+- gateway 与 dashboard 共享同一个 PVC（挂载点 /opt/data，即 `~/.hermes` 状态）；不要用 `emptyDir`，它是 per-pod 的，会静默切断状态共享。
+- 会话状态在 pod 本地 SQLite，gateway 固定单副本 + `Recreate` 策略；`07-hpa.yaml` 的 `maxReplicas` 封顶为 1，状态外置前不要调大。
+- Ingress 默认开启 basic-auth（fail-closed）：先 `htpasswd -c auth <YOUR_USERNAME> && kubectl -n hermes create secret generic hermes-dashboard-auth --from-file=auth`，否则 nginx 返回 503。
 
 ### 真机验证状态
 

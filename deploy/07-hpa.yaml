@@ -1,3 +1,8 @@
+# HPA is intentionally capped at 1 replica: gateway session state lives in
+# pod-local SQLite on the shared PVC, so a second replica would split-brain
+# sessions. Keep this file as the template; raise maxReplicas only after
+# session state moves to an external store (e.g. Postgres/Redis), and remove
+# strategy: Recreate from 03-deployment.yaml at the same time.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -9,7 +14,7 @@ spec:
     kind: Deployment
     name: gateway
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 1
   metrics:
     - type: Resource
       resource:

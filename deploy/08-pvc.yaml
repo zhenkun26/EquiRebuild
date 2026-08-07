@@ -1,0 +1,22 @@
+# Shared state volume for gateway + dashboard (~/.hermes lives at /opt/data).
+# Both Deployments MUST mount the same PVC: the dashboard reads the sessions
+# and state that the gateway writes. emptyDir is per-pod and silently breaks
+# that sharing — do not use it here.
+#
+# ReadWriteMany requires a storage class that supports it (e.g. NFS, EFS,
+# CephFS). On single-node clusters (kind/minikube/k3s) ReadWriteOnce works
+# because both pods land on the same node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-data
+  namespace: hermes
+  labels:
+    app.kubernetes.io/name: hermes-agent
+spec:
+  accessModes:
+    - ReadWriteMany
+  # storageClassName: <YOUR_RWX_STORAGE_CLASS>
+  resources:
+    requests:
+      storage: 5Gi

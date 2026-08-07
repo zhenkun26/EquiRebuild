@@ -1,5 +1,11 @@
 # TLS/domain placeholders — replace <YOUR_DOMAIN> before applying.
-# The dashboard stores API keys: keep it behind auth or a VPN, not public.
+#
+# The dashboard stores API keys, so TLS alone is NOT enough: the basic-auth
+# annotations below gate it behind credentials. Create the auth secret first:
+#   htpasswd -c auth <YOUR_USERNAME>
+#   kubectl -n hermes create secret generic hermes-dashboard-auth --from-file=auth
+# Without that Secret, nginx answers 503 — fail-closed, never fail-open.
+# For stronger setups, swap basic-auth for oauth2-proxy / VPN-only ingress.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,6 +14,10 @@ metadata:
   labels:
     app.kubernetes.io/name: hermes-agent
     app.kubernetes.io/component: dashboard
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: hermes-dashboard-auth
+    nginx.ingress.kubernetes.io/auth-realm: "hermes dashboard"
 spec:
   ingressClassName: nginx
   rules:

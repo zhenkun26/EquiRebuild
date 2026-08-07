@@ -1,6 +1,9 @@
 # Gateway + dashboard deployments. Replace <YOUR_REGISTRY> before applying.
-# The /opt/data volume uses emptyDir as a placeholder — swap for a PVC
-# (readWriteMany or per-pod) to keep ~/.hermes state across restarts.
+# For reproducible deploys, pin the image by digest instead of a mutable tag:
+#   image: <YOUR_REGISTRY>/hermes-agent@sha256:<YOUR_DIGEST>
+# Both pods mount the SAME shared PVC (deploy/08-pvc.yaml): the dashboard
+# reads the ~/.hermes state that the gateway writes. emptyDir is per-pod and
+# silently breaks that sharing — do not revert to it.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +13,12 @@ metadata:
     app.kubernetes.io/name: hermes-agent
     app.kubernetes.io/component: gateway
 spec:
+  # Session state lives in pod-local SQLite on the shared PVC; the gateway
+  # cannot scale horizontally until state moves to an external store.
   replicas: 1
+  strategy:
+    # Recreate: two gateways must never write the same SQLite state at once.
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: hermes-agent
@@ -36,9 +44,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: hermes-config
+            # NOT optional: a missing Secret must fail fast at pod start
+            # instead of letting the gateway run without credentials.
             - secretRef:
                 name: hermes-secret
-                optional: true
           volumeMounts:
             - name: hermes-data
               mountPath: /opt/data
@@ -58,7 +67,8 @@ spec:
           #   periodSeconds: 10
       volumes:
         - name: hermes-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: hermes-data
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -98,7 +108,6 @@ spec:
                 name: hermes-config
             - secretRef:
                 name: hermes-secret
-                optional: true
           volumeMounts:
             - name: hermes-data
               mountPath: /opt/data
@@ -125,4 +134,5 @@ spec:
             failureThreshold: 3
       volumes:
         - name: hermes-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: hermes-data

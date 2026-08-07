@@ -27,7 +27,7 @@ deploy/*.yaml                     # 8 份 K8s 清单（gateway + dashboard）
 
 | ID | Severity | Dimension | Location | Issue | Status |
 |:---|:---|:---|:---|:---|:---|
-| 1 | [中危][P1] | D3 安全 | `tests/skills/test_hardening_review_skill.py` 3 处（原 126/149/287 行） | 测试源码内联形似密钥的夹具字符串（`API_KEY = 'sk-...'`、`api_key = 'supersecretvalue'`），造成自审扫描噪音，易被误读为硬编码密钥 | fixed |
+| 1 | [中危][P1] | D3 安全 | `tests/skills/test_hardening_review_skill.py` 3 处（原 126/149/287 行） | 测试源码内联形似密钥的夹具字符串（`API_KEY = 'sk-…'`、`api_key = '<YOUR_EXAMPLE_KEY>'`），造成自审扫描噪音，易被误读为硬编码密钥 | fixed |
 | 2 | [中危][P1] | D1 逻辑 | `hardening_scan.py main()` | `--output` 写入失败时未捕获 `OSError`，会以裸 traceback 崩溃而非快速失败 | fixed |
 | 3 | [中危][P1] | D5 可观测性 | `hardening_scan.py main()` | stdout 管道关闭时 `print` 抛 `BrokenPipeError`，非友好退出 | fixed |
 
@@ -38,7 +38,7 @@ deploy/*.yaml                     # 8 份 K8s 清单（gateway + dashboard）
 ```diff
 --- tests/skills/test_hardening_review_skill.py (before)
 ++ tests/skills/test_hardening_review_skill.py (after)
--    fixture.write_text("api_key = 'supersecretvalue'\n", encoding="utf-8")
+-    fixture.write_text("api_key = '<YOUR_EXAMPLE_KEY>'\n", encoding="utf-8")
 +    fixture.write_text(
 +        (FIXTURES_DIR / "secret_line.txt").read_text(encoding="utf-8"),
 +        encoding="utf-8",
@@ -72,7 +72,7 @@ cd /Users/yuzheng/My_Learning_For_AI/EquiRebuild
 .venv/bin/python -m coverage report -m --include='*/hermes-skills/hardening-review/scripts/hardening_scan.py'
 ```
 
-**结果**：`30 passed`；`hardening_scan.py` 行覆盖率 **99%**（≥80% 达标；仅 2 条 `continue` 行未被覆盖计数，行为已被测试断言验证）。
+**结果**：`49 passed`；`hardening_scan.py` 行覆盖率 **94%**（≥80% 达标；`pyproject.toml` 中 `fail_under = 80` 强制门禁）。2026-08-07 重构轮后：`hardening-scan .` 全仓扫描退出码 `0`（fixtures 经 `.hardening-scan.toml` 豁免），dogfooding 闭环对全仓成立。
 
 ### 3.2 Concurrency smoke
 

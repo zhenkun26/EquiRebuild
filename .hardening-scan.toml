@@ -1,0 +1,12 @@
+# Repository-level configuration for the hardening-scan tool.
+# tests/skills/fixtures/ contains intentionally vulnerable samples used by the
+# test-suite; scanning them always produces findings by design.
+# .coverage is a local coverage.py data artifact (binary SQLite).
+exclude = [
+    "tests/skills/fixtures/*",
+    ".coverage",
+]
+
+# Rules to disable repo-wide (prefer inline `# hardening-scan: ignore=RULE`
+# comments for one-off suppressions). Must be known rule IDs, e.g.:
+# disable-rules = ["ABSOLUTE_PATH"]

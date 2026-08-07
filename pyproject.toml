@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-hardening-scan"
+version = "0.1.0"
+description = "Mechanical adversarial-review scanner for the hardening-review Hermes skill (pure stdlib)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "yuzheng" }]
+keywords = ["security", "review", "hardening", "static-analysis"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "coverage>=7.0",
+    "ruff>=0.5.0",
+]
+
+[project.scripts]
+hardening-scan = "hardening_scan:main"
+
+# The scanner must stay inside the Hermes skill directory layout so the skill
+# can be installed with a plain `cp -R`; we package it from there in place.
+[tool.setuptools]
+package-dir = { "" = "hermes-skills/hardening-review/scripts" }
+py-modules = ["hardening_scan"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["hardening_scan"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+# fixtures/ contains intentionally vulnerable samples; never lint them.
+exclude = ["tests/skills/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]

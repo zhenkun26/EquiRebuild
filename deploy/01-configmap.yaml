@@ -5,6 +5,7 @@ metadata:
   namespace: hermes
 data:
   # Match the upstream docker-compose.yml defaults; override per cluster.
-  HERMES_UID: "10000"
-  HERMES_GID: "10000"
+  # Must equal securityContext.runAsUser/fsGroup in 03-deployment.yaml.
+  HERMES_UID: "10001"
+  HERMES_GID: "10001"
   TZ: "Asia/Shanghai"

@@ -1,0 +1,2 @@
+a = 'glpat-abcdefghijklmnopqrst'
+b = 'xoxb-1234567890-abcdef'

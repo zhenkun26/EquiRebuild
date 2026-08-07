@@ -45,7 +45,9 @@ Do not use it for greenfield feature design or for simple typo fixes — those b
 
 | Step | Action |
 |:---|:---|
-| Scan | `python3 scripts/hardening_scan.py <target> [--output report.md] [--exclude GLOB ...]` |
+| Scan | `python3 scripts/hardening_scan.py <target> [--output report.md] [--exclude GLOB ...] [--config PATH] [--no-config]` |
+| List rules | `python3 scripts/hardening_scan.py --list-rules` |
+| Suppress | inline `# hardening-scan: ignore=RULE_ID`, or `.hardening-scan.toml` (`exclude`, `disable-rules`) |
 | Find code | `search_files` with the target directory |
 | Fix | `patch` each P0/P1 finding; never silence an error silently |
 | Verify | `pytest tests/skills/ -q` and `coverage report` (≥80%) |
@@ -59,11 +61,17 @@ Do not use it for greenfield feature design or for simple typo fixes — those b
 Run `scripts/hardening_scan.py` over the target. It detects:
 
 - **D1 logic**: bare `except:` and `except X: pass` (swallowed exceptions), unparseable files.
-- **D2 performance**: HTTP client calls (`requests`, `httpx`, `aiohttp`) without an explicit `timeout`.
-- **D3 security**: hardcoded secret-like assignments and known secret prefixes (`sk-`, `AKIA`, `ghp_`).
+- **D2 performance**: HTTP client calls (`requests`, `httpx`, `aiohttp`) without an explicit `timeout` — import-aware, so same-named constructors from other SDKs are not flagged.
+- **D3 security**: hardcoded secret-like assignments and known secret prefixes (`sk-`, `AKIA`, `ghp_`, `glpat-`, `xox*-`, `AIza`, private-key blocks); obvious placeholders (`<YOUR_...>`, `REPLACE_WITH_*`, `${VAR}`) are not flagged.
 - **D4 configuration**: absolute filesystem paths and non-UTF-8 files.
 
 Line-based findings are marked `[manual]` — confirm them with `read_file` before fixing.
+
+Suppression, when a finding is a confirmed false positive or intentional:
+
+- Inline: `# hardening-scan: ignore=RULE_ID` on the flagged line (omit `=RULE_ID` to suppress all rules on that line).
+- Repo-wide: `.hardening-scan.toml` with `exclude = [...]` / `disable-rules = [...]`; auto-discovered from the target directory or CWD, overridable with `--config` / `--no-config`.
+- `python3 scripts/hardening_scan.py --list-rules` prints the rule registry (IDs, severities, dimensions).
 
 ### Phase 2: Five-dimension manual review
 
