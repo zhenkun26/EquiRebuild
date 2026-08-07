@@ -53,7 +53,7 @@ Every finding is labeled `[严重][P0]` or `[中危][P1]` with an exact file loc
 
 ---
 
-## 三、机械扫描器 / Mechanical Scanner
+## 三、静态扫描器 / Static Scanner
 
 **`hardening_scan.py`** 仅依赖 Python 标准库，自动检测以下问题：
 
@@ -153,7 +153,7 @@ uv venv && uv pip install --python .venv/bin/python -e '.[dev]'
 ├── hermes-skills/hardening-review/   # 核心交付：Hermes 用户技能 / core deliverable
 │   ├── SKILL.md                      # 5 维对抗审查程序（HARDLINE 合规）/ 5-dimension review procedure (HARDLINE compliant)
 │   ├── install.sh                    # 安装与校验脚本（目标 ~/.hermes/skills/）/ install & verify script
-│   ├── scripts/hardening_scan.py     # 机械扫描器（纯 stdlib，退出码 0/1/2）/ mechanical scanner (stdlib-only)
+│   ├── scripts/hardening_scan.py     # 静态扫描器（纯 stdlib，退出码 0/1/2）/ static scanner (stdlib-only)
 │   └── templates/report_template.md  # 验收报告骨架（<YOUR_...> 占位符规范）/ acceptance report template
 ├── pyproject.toml                    # 打包与开发依赖（uv/pip 可复现安装）/ packaging & dev dependencies (reproducible install)
 ├── .hardening-scan.toml              # 扫描器仓级配置（豁免 fixtures 等）/ repo-level scanner configuration
@@ -236,7 +236,7 @@ kubectl -n hermes get pods
 
 ### 2026-08-06 — 首次交付 / Initial delivery（`c2eb841`）
 
-- 交付 `hardening-review` 技能、机械扫描器、报告模板、30 个测试用例、8 份 K8s 清单与综合验收报告。
+- 交付 `hardening-review` 技能、静态扫描器、报告模板、30 个测试用例、8 份 K8s 清单与综合验收报告。
 
 ---
 
