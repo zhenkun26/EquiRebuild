@@ -1,4 +1,4 @@
-# Hermes Agent Hardening
+# EquiRebuild
 
 > 本项目是 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) 的二次开发工作区。首个交付为可复用的 Hermes 用户技能 **hardening-review**：将「对抗性生产级审查」固化为标准流程，并以该技能完成本仓库自身的加固（dogfooding）。
 >
@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-stdlib%20only-3776AB)](hermes-skills/hardening-review/scripts/hardening_scan.py)
 [![Tests](https://img.shields.io/badge/Tests-57%20passed-2ea44f)](docs/ACCEPTANCE_REPORT.md)
 [![Coverage](https://img.shields.io/badge/Coverage-95%25-2ea44f)](docs/ACCEPTANCE_REPORT.md)
-[![CI](https://github.com/zhenkun26/hermes-agent-hardening/actions/workflows/ci.yml/badge.svg)](https://github.com/zhenkun26/hermes-agent-hardening/actions/workflows/ci.yml)
+[![CI](https://github.com/zhenkun26/EquiRebuild/actions/workflows/ci.yml/badge.svg)](https://github.com/zhenkun26/EquiRebuild/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/licenses/MIT)
 
 ---
