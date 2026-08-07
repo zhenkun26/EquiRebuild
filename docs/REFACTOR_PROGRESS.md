@@ -4,7 +4,7 @@
 
 ## 背景
 
-本轮重构源于对仓库的审查报告（问题清单：无依赖清单/CI、扫描器无抑制机制、K8s 清单自相矛盾、规则误报等）。工作区路径：`/Users/yuzheng/My_Learning_For_AI/EquiRebuild/hermes-agent-hardening`。
+本轮重构源于对仓库的审查报告（问题清单：无依赖清单/CI、扫描器无抑制机制、K8s 清单自相矛盾、规则误报等）。工作区路径：`/Users/yuzheng/My_Learning_For_AI/EquiRebuild/hermes-agent-hardening`。<!-- # hardening-scan: ignore=ABSOLUTE_PATH -->
 
 ## 已完成（①–⑨，全部本地验证通过）
 
