@@ -41,7 +41,9 @@ jobs:
       - name: Dogfood scan (fixtures must produce findings, exit 1)
         run: |
           set +e
-          .venv/bin/hardening-scan tests/skills/fixtures/
+          # --no-config: the repo-level .hardening-scan.toml exempts fixtures
+          # for the full-repo scan; the dogfood step must bypass that exemption.
+          .venv/bin/hardening-scan --no-config tests/skills/fixtures/
           code=$?
           set -e
           test "$code" -eq 1
