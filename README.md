@@ -245,3 +245,5 @@ kubectl -n hermes get pods
 本项目以 **MIT** 许可发布。上游 Hermes Agent 版权归 [NousResearch](https://github.com/NousResearch) 所有，本仓库仅用于学习与二次开发。
 
 This project is released under the **MIT** license. Upstream Hermes Agent is copyrighted by [NousResearch](https://github.com/NousResearch); this repository exists for learning and secondary development only.
+
+> 本项目由 Vibe Coding 辅助实现落地。Built with Vibe Coding.
