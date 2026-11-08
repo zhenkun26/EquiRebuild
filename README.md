@@ -106,7 +106,9 @@ hardening-scan <target> ...
 
 ## 四、安装与使用 / Installation & Usage
 
-安装为 Hermes 用户技能：
+安装为 Hermes 用户技能。**安装会删除并替换目标目录及其同名 `.tmp` 目录**（默认目标为 `~/.hermes/skills/security/hardening-review`）；已有副本中的本地修改会丢失。先检查并备份需要保留的内容；`--check` 仅比较，不执行安装。
+
+Install as a Hermes user skill. **Installation deletes and replaces the destination and its sibling `.tmp` directory** (default: `~/.hermes/skills/security/hardening-review`), discarding local changes in an existing copy. Inspect and back up anything you need first; `--check` only compares and does not install.
 
 ```bash
 ./hermes-skills/hardening-review/install.sh          # 安装到 ~/.hermes/skills/security/hardening-review
@@ -164,7 +166,7 @@ uv venv && uv pip install --python .venv/bin/python -e '.[dev]'
 ├── openspec/                         # OpenSpec 规格仓库 / OpenSpec spec repository
 │   ├── specs/hardening-review/       # 主规格（已同步）/ main spec (synced)
 │   └── changes/archive/              # 已归档变更 / archived changes
-└── hermes-agent/                     # 上游只读克隆（仅作参考）/ upstream read-only clone (reference only)
+└── hermes-agent/                     # 另行获取，不随本仓分发 / separately acquired upstream checkout (not included)
 ```
 
 ---
@@ -188,6 +190,10 @@ Project context and conventions (no upstream changes, `~/.hermes/skills/` instal
 ## 八、部署 / Deployment
 
 ### Docker Compose（验证上游配置 / validate upstream configuration）
+
+以下命令以仓库根目录为工作目录，要求另行从 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) 获取上游到 `hermes-agent/`，并确认所选 revision 包含 `docker-compose.yml`。该目录被 `.gitignore` 排除，不随本仓库克隆提供；本 README 未固定已验证的上游 revision。运行前检查该 revision 的配置、凭据、端口与卷设置，保持上游参考源码不变。
+
+Run the following commands from this repository root only after separately obtaining [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) at `hermes-agent/` and confirming that the chosen revision contains `docker-compose.yml`. That directory is gitignored and is not included in a clone of this repository. This README does not pin a verified upstream revision. Review that revision's configuration, credentials, ports, and volumes before running it, and keep the upstream reference source unchanged.
 
 ```bash
 docker compose -f hermes-agent/docker-compose.yml config --quiet
